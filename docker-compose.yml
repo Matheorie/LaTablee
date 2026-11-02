@@ -1,0 +1,91 @@
+services:
+  postgres:
+    image: postgres:16.6-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      USERS_DB_PASSWORD: ${USERS_DB_PASSWORD}
+      MEALS_DB_PASSWORD: ${MEALS_DB_PASSWORD}
+      BOOKINGS_DB_PASSWORD: ${BOOKINGS_DB_PASSWORD}
+      ACCOUNTS_DB_PASSWORD: ${ACCOUNTS_DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 10s
+      retries: 5
+
+  users:
+    build: ./services/users
+    environment:
+      DB_HOST: postgres
+      DB_NAME: users
+      DB_USER: users
+      DB_PASSWORD: ${USERS_DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ROOT_PATH: /api/users
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  meals:
+    build: ./services/meals
+    environment:
+      DB_HOST: postgres
+      DB_NAME: meals
+      DB_USER: meals
+      DB_PASSWORD: ${MEALS_DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ROOT_PATH: /api/meals
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  bookings:
+    build: ./services/bookings
+    environment:
+      DB_HOST: postgres
+      DB_NAME: bookings
+      DB_USER: bookings
+      DB_PASSWORD: ${BOOKINGS_DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ROOT_PATH: /api/bookings
+      MEALS_URL: http://meals:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      meals:
+        condition: service_started
+
+  accounts:
+    build: ./services/accounts
+    environment:
+      DB_HOST: postgres
+      DB_NAME: accounts
+      DB_USER: accounts
+      DB_PASSWORD: ${ACCOUNTS_DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ROOT_PATH: /api/accounts
+      MEALS_URL: http://meals:8000
+      BOOKINGS_URL: http://bookings:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      meals:
+        condition: service_started
+      bookings:
+        condition: service_started
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:8080"
+    depends_on: [users, meals, bookings, accounts]
+
+volumes:
+  pgdata:
