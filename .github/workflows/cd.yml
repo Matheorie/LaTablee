@@ -73,7 +73,8 @@ jobs:
           cluster_name: latablee
 
       - name: Mettre à jour les tags d'images
-        run: sed -i "s/newTag: .*/newTag: ${TAG}/" deploy/kustomization.yaml
+        run: |
+          sed -i "s/newTag: .*/newTag: ${TAG}/" deploy/kustomization.yaml
 
       - name: Créer le namespace et le Secret à partir des secrets GitHub
         env:
