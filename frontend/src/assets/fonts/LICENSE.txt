@@ -1,0 +1,8 @@
+Bricolage Grotesque
+Copyright 2022 The Bricolage Grotesque Project Authors (https://github.com/ateliertriay/bricolage)
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+The license text is available with a FAQ at https://scripts.sil.org/OFL
+
+Les fichiers bricolage-*.woff2 sont les sous ensembles latin de la police, téléchargés sans
+modification depuis Google Fonts, tels qu'embarqués dans les maquettes du projet.
