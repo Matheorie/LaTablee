@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app.config
+  namespace: latablee
+data:
+  DB_HOST: postgres
+  USERS_DB_NAME: users
+  USERS_DB_USER: users
+  MEALS_DB_NAME: meals
+  MEALS_DB_USER: meals
+  BOOKINGS_DB_NAME: bookings
+  BOOKINGS_DB_USER: bookings
+  ACCOUNTS_DB_NAME: accounts
+  ACCOUNTS_DB_USER: accounts
+  MEALS_URL: http://meals:8000
+  BOOKINGS_URL: http://bookings:8000
+  LOG_LEVEL: INFO
