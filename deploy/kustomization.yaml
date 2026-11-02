@@ -1,0 +1,36 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: latablee
+
+resources:
+  - namespace.yaml
+  - config.yaml
+  - postgres/pv.yaml
+  - postgres/pvc.yaml
+  - postgres/initconfig.yaml
+  - postgres/deployment.yaml
+  - postgres/service.yaml
+  - users/deployment.yaml
+  - users/service.yaml
+  - meals/deployment.yaml
+  - meals/service.yaml
+  - bookings/deployment.yaml
+  - bookings/service.yaml
+  - accounts/deployment.yaml
+  - accounts/service.yaml
+  - frontend/deployment.yaml
+  - frontend/service.yaml
+
+# Le tag est remplacé par le pipeline de déploiement (cd.yml) à chaque version.
+images:
+  - name: ghcr.io/matheorie/latablee/users
+    newTag: latest
+  - name: ghcr.io/matheorie/latablee/meals
+    newTag: latest
+  - name: ghcr.io/matheorie/latablee/bookings
+    newTag: latest
+  - name: ghcr.io/matheorie/latablee/accounts
+    newTag: latest
+  - name: ghcr.io/matheorie/latablee/frontend
+    newTag: latest

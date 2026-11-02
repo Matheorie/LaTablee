@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bookings
+  namespace: latablee
+  labels:
+    app: bookings
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: bookings
+  template:
+    metadata:
+      labels:
+        app: bookings
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: bookings
+          image: ghcr.io/matheorie/latablee/bookings:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef: { name: app.config, key: DB_HOST }
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef: { name: app.config, key: BOOKINGS_DB_NAME }
+            - name: DB_USER
+              valueFrom:
+                configMapKeyRef: { name: app.config, key: BOOKINGS_DB_USER }
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: app.secrets, key: BOOKINGS_DB_PASSWORD }
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef: { name: app.secrets, key: JWT_SECRET }
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef: { name: app.config, key: LOG_LEVEL }
+            - name: ROOT_PATH
+              value: /api/bookings
+            - name: MEALS_URL
+              valueFrom:
+                configMapKeyRef: { name: app.config, key: MEALS_URL }
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "5"]
