@@ -1,0 +1,121 @@
+name: CD
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/matheorie/latablee
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Le tag doit pointer sur un commit de main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "Le tag ${GITHUB_REF_NAME} ne pointe pas sur un commit de main."
+            exit 1
+          fi
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: verify
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { name: users, context: services/users }
+          - { name: meals, context: services/meals }
+          - { name: bookings, context: services/bookings }
+          - { name: accounts, context: services/accounts }
+          - { name: frontend, context: frontend }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/${{ matrix.name }}:${{ github.ref_name }}
+            ${{ env.IMAGE_PREFIX }}/${{ matrix.name }}:latest
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  # Cluster kind éphémère créé dans le job : démontre le déploiement complet sans cluster
+  # public. Pour déployer sur le minikube local, remplacer runs-on par un runner self-hosted
+  # et supprimer l'étape helm/kind-action (voir README).
+  deploy:
+    runs-on: ubuntu-latest
+    needs: publish
+    env:
+      TAG: ${{ github.ref_name }}
+      NAMESPACE: latablee
+    steps:
+      - uses: actions/checkout@v4
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: latablee
+
+      - name: Mettre à jour les tags d'images
+        run: |
+          sed -i "s/newTag: .*/newTag: ${TAG}/" deploy/kustomization.yaml
+
+      - name: Créer le namespace et le Secret à partir des secrets GitHub
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          USERS_DB_PASSWORD: ${{ secrets.USERS_DB_PASSWORD }}
+          MEALS_DB_PASSWORD: ${{ secrets.MEALS_DB_PASSWORD }}
+          BOOKINGS_DB_PASSWORD: ${{ secrets.BOOKINGS_DB_PASSWORD }}
+          ACCOUNTS_DB_PASSWORD: ${{ secrets.ACCOUNTS_DB_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        run: |
+          kubectl apply -f deploy/namespace.yaml
+          kubectl create secret generic app.secrets --namespace "$NAMESPACE" \
+            --from-literal=POSTGRES_USER=postgres \
+            --from-literal=POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+            --from-literal=USERS_DB_PASSWORD="$USERS_DB_PASSWORD" \
+            --from-literal=MEALS_DB_PASSWORD="$MEALS_DB_PASSWORD" \
+            --from-literal=BOOKINGS_DB_PASSWORD="$BOOKINGS_DB_PASSWORD" \
+            --from-literal=ACCOUNTS_DB_PASSWORD="$ACCOUNTS_DB_PASSWORD" \
+            --from-literal=JWT_SECRET="$JWT_SECRET" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Déployer
+        run: kubectl apply -k deploy/
+
+      - name: Attendre chaque déploiement
+        run: |
+          for deployment in postgres users meals bookings accounts frontend; do
+            kubectl rollout status "deployment/${deployment}" -n "$NAMESPACE" --timeout=180s
+          done
+
+      - name: Tester la route /health de chaque service
+        run: |
+          for service in users meals bookings accounts; do
+            kubectl run "check-${service}" -n "$NAMESPACE" --rm -i --restart=Never \
+              --image=curlimages/curl:8.11.1 -- \
+              curl -fsS "http://frontend:8080/api/${service}/health"
+          done
+
+      - name: Retour arrière en cas d'échec
+        if: failure()
+        run: |
+          for deployment in users meals bookings accounts frontend; do
+            kubectl rollout undo "deployment/${deployment}" -n "$NAMESPACE" || true
+          done

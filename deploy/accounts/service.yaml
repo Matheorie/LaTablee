@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: accounts
+  namespace: latablee
+spec:
+  type: ClusterIP
+  selector:
+    app: accounts
+  ports:
+    - port: 8000
+      targetPort: 8000
